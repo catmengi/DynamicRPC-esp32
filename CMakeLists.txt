@@ -1,4 +1,4 @@
-idf_component_register(SRCS "hashtable.c/hashtable.c" "md_array.c" "rpcbuff.c" "rpccall.c" "rpcclient.c" "rpcmsg.c" "rpcpack.c" "tqueque/tqueque.c" "rpcserver.c"
+idf_component_register(SRCS "hashtable.c/hashtable.c" "rpcbuff.c" "rpccall.c" "rpcclient.c" "rpcmsg.c" "rpcpack.c" "tqueque/tqueque.c" "rpcserver.c"
                     INCLUDE_DIRS "."
                     REQUIRES vfs esp_wifi nvs_flash esp_event fatfs esp_timer pthread freertos)
 

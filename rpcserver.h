@@ -5,7 +5,6 @@
 #include "freertos/idf_additions.h"
 #include <stddef.h>
 #ifndef RPCCALL_H
-#define RPCCALL_H
 #include "rpccall.h"
 #endif
 #include <ffi.h>

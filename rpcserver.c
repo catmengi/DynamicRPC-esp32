@@ -18,7 +18,7 @@
 #include <libubox/utils.h>
 #include <unistd.h>
 #define DEFAULT_CLIENT_TIMEOUT 1
-#define DEFAULT_MAXIXIMUM_CLIENT 512
+#define DEFAULT_MAXIXIMUM_CLIENT 5
 #define _GNU_SOURCE
 #define RPCSERVER
 
@@ -148,7 +148,7 @@ void rpcserver_start(struct rpcserver* rpcserver){
     assert(rpcserver->reliverargs);
     rpcserver->reliverargs[0] = rpcserver;
     assert(xTaskCreate(rpcserver_dispatcher,"accept_thread",
-        2048 * sizeof(void*),rpcserver,5,&rpcserver->acceptor) == pdPASS);
+        1024 * 16,rpcserver,5,&rpcserver->acceptor) == pdPASS);
     assert(pthread_create(&rpcserver->reliver, &attr,rpcserver_dispatcher_reliver,rpcserver->reliverargs) == 0);
     pthread_attr_destroy(&attr);
 }
@@ -474,7 +474,6 @@ void* rpcserver_client_thread(void* arg){
                                         rpctypes_free(call.args,call.args_amm);
                                         break;
                                     }else repl.msg_type = OK;
-
                                     if(rpcmsg_write_to_fd(&repl,thrd->client_fd) < 0){
                                         free(call.fn_name);
                                         rpctypes_free(call.args,call.args_amm);
@@ -563,7 +562,7 @@ void* rpcserver_dispatcher_reliver(void* args){
                 close(*fd);
                 vTaskDelete(serv->acceptor);
                 if(xTaskCreate(rpcserver_dispatcher,"accept_thread",
-                    2048 * sizeof(void*),serv,5,&serv->acceptor) != pdPASS) exit(1);
+                    1024 * 16,serv,5,&serv->acceptor) != pdPASS) exit(1);
                 sleep_iter = 0;
             }
             sleep_iter++;
@@ -585,7 +584,7 @@ void rpcserver_dispatcher(void* vserv){
     while(serv->stop == 0){
         if(serv->clientcount < DEFAULT_MAXIXIMUM_CLIENT){
             fd = accept(serv->sfd, (struct sockaddr*)&addr,&addrlen);
-                if(fd < 0) {usleep(10000);continue;}
+                if(fd < 0) {vTaskDelay(150);continue;}
                 printf("%s: got client from %s\n",__PRETTY_FUNCTION__,inet_ntoa(addr.sin_addr));
                 serv->is_incon = 1;
                 struct rpcmsg msg = {0};
