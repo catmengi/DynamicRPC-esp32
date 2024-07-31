@@ -63,6 +63,7 @@ ffi_type** rpctypes_to_ffi_types(enum rpctypes* rpctypes,size_t rpctypes_amm){
             continue;
         }
         if(rpctypes[i] == INTERFUNC){out[i] = &ffi_type_pointer; continue;}
+        if(rpctypes[i] == RPCSTRUCT){ out[i] = &ffi_type_pointer; continue;}
     }
     return out;
 exit:
@@ -221,9 +222,11 @@ void rpcserver_unregister_fn(struct rpcserver* serv, char* fn_name){
 int __rpcserver_call_fn(struct rpcret* ret,struct rpcserver* serv,struct rpccall* call,struct fn* cfn, int* err_code){
     void** callargs = calloc(cfn->nargs, sizeof(void*));
     assert(callargs);
-    uint8_t j = 0;;
+    uint8_t j = 0;
     struct tqueque* rpcbuff_upd = tqueque_create();
     struct tqueque* rpcbuff_free = tqueque_create();
+    struct tqueque* rpcstruct_upd = tqueque_create();
+    struct tqueque* _rpcstruct_free = tqueque_create();
     assert(rpcbuff_upd);
     assert(rpcbuff_free);
     enum rpctypes* check = rpctypes_get_types(call->args,call->args_amm);
@@ -247,7 +250,7 @@ int __rpcserver_call_fn(struct rpcret* ret,struct rpcserver* serv,struct rpccall
             *(void**)callargs[i] = serv->interfunc;
             continue;
         }
-        if(j <= call->args_amm){
+        if(j < call->args_amm){
             if(call->args[j].type == RPCBUFF){
                 callargs[i] = calloc(1,sizeof(void*));
                 assert(callargs[i]);
@@ -256,6 +259,19 @@ int __rpcserver_call_fn(struct rpcret* ret,struct rpcserver* serv,struct rpccall
                     tqueque_push(rpcbuff_upd,*(void**)callargs[i],1,NULL);
                 else
                     tqueque_push(rpcbuff_free,*(void**)callargs[i],1,NULL);
+                free(call->args[j].data);
+                call->args[j].data = NULL;
+                j++;
+                continue;
+            }
+            if(call->args[j].type == RPCSTRUCT){
+                callargs[i] = calloc(1,sizeof(void*));
+                assert(callargs[i]);
+                *(void**)callargs[i] = unpack_rpcstruct_type(&call->args[j]);
+                if(call->args[j].flag == 1)
+                    tqueque_push(rpcstruct_upd,*(void**)callargs[i],1,NULL);
+                else
+                    tqueque_push(_rpcstruct_free,*(void**)callargs[i],1,NULL);
                 free(call->args[j].data);
                 call->args[j].data = NULL;
                 j++;
@@ -376,7 +392,11 @@ int __rpcserver_call_fn(struct rpcret* ret,struct rpcserver* serv,struct rpccall
         }
         else if(rtype == RPCBUFF && *(void**)fnret == NULL)
             ret->ret.type = VOID;
-
+        if(rtype == RPCSTRUCT && *(void**)fnret != NULL){
+            create_rpcstruct_type(*(struct rpcstruct**)fnret,0,&ret->ret);
+        }
+        else if(rtype == RPCSTRUCT && *(void**)fnret == NULL)
+            ret->ret.type = VOID;
     }
     for(uint8_t i = 0; i < ret->resargs_amm; i++){
         if(ret->resargs[i].type == RPCBUFF){
@@ -385,11 +405,20 @@ int __rpcserver_call_fn(struct rpcret* ret,struct rpcserver* serv,struct rpccall
             create_rpcbuff_type(buf,ret->resargs[i].flag,&ret->resargs[i]);
             _rpcbuff_free(buf);
         }
+        if(ret->resargs[i].type == RPCSTRUCT){
+            struct rpcstruct* buf = tqueque_pop(rpcstruct_upd,NULL,NULL);
+            if(!buf) break;
+            create_rpcstruct_type(buf,ret->resargs[i].flag,&ret->resargs[i]);
+            rpcstruct_free(buf);
+        }
     }
     tqueque_free(rpcbuff_upd);
-    struct rpcbuff* buf = NULL;
+    tqueque_free(rpcstruct_upd);
+    void* buf = NULL;
     while((buf = tqueque_pop(rpcbuff_free,NULL,NULL)) != NULL) _rpcbuff_free(buf);
+    while((buf = tqueque_pop(rpcbuff_free,NULL,NULL)) != NULL) rpcstruct_free(buf);
     tqueque_free(rpcbuff_free);
+    tqueque_free(_rpcstruct_free);
     free(fnret);
     for(uint8_t i = 0; i < cfn->nargs; i++){
         free(callargs[i]);
@@ -407,7 +436,7 @@ exit:
     free(callargs);
     return 1;
 }
-void* rpcserver_client_thread(void* arg){
+void rpcserver_client_thread(void* arg){
     struct client_thread* thrd = (struct client_thread*)arg;
     struct rpcmsg gotmsg = {0},repl = {0};
     thrd->serv->clientcount++;
@@ -544,8 +573,9 @@ exit:
     close(thrd->client_fd);
     thrd->serv->clientcount--;
     free(thrd);
-    pthread_detach(pthread_self());
-    pthread_exit(NULL);
+    // pthread_detach(pthread_self());
+    // pthread_exit(NULL);
+    vTaskDelete(NULL);
 }
 
 /*this function must run in another thread*/
@@ -584,7 +614,7 @@ void rpcserver_dispatcher(void* vserv){
     while(serv->stop == 0){
         if(serv->clientcount < DEFAULT_MAXIXIMUM_CLIENT){
             fd = accept(serv->sfd, (struct sockaddr*)&addr,&addrlen);
-                if(fd < 0) {vTaskDelay(150);continue;}
+                if(fd < 0) {vTaskDelay(pdMS_TO_TICKS((150)));continue;}
                 printf("%s: got client from %s\n",__PRETTY_FUNCTION__,inet_ntoa(addr.sin_addr));
                 serv->is_incon = 1;
                 struct rpcmsg msg = {0};
@@ -597,10 +627,12 @@ void rpcserver_dispatcher(void* vserv){
                         assert(thrd);
                         thrd->client_fd = fd;
                         thrd->serv = serv;
-                        pthread_t client_thread = 0;
-                        pthread_attr_t attr; pthread_attr_init(&attr);
-                        pthread_create(&client_thread,&attr,rpcserver_client_thread,thrd);
-                        pthread_attr_destroy(&attr);
+                        // pthread_t client_thread = 0;
+                        // pthread_attr_t attr; pthread_attr_init(&attr);
+                        // pthread_create(&client_thread,&attr,rpcserver_client_thread,thrd);
+                        // pthread_attr_destroy(&attr);
+                        TaskHandle_t client;
+                        if(xTaskCreate(rpcserver_client_thread,"client",1024 * 16,thrd,10,&client)!=pdPASS) exit(1);
                     }else {printf("%s: client not connected\n",__PRETTY_FUNCTION__);close(fd);memset(&addr,0,sizeof(addr));}
                 }else{printf("%s: wrong info from client\n",__PRETTY_FUNCTION__);close(fd);memset(&addr,0,sizeof(addr));}
                 if(msg.payload) free(msg.payload);
