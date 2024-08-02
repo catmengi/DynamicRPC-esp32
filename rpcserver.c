@@ -592,6 +592,7 @@ void* rpcserver_dispatcher_reliver(void* args){
             if (sleep_iter >= DEFAULT_CLIENT_TIMEOUT){
                 printf("%s: client died, closing socket\n",__PRETTY_FUNCTION__);
                 close(*fd);
+                sleep_iter = 0;
             }
             sleep_iter++;
         }
