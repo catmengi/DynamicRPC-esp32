@@ -590,12 +590,8 @@ void* rpcserver_dispatcher_reliver(void* args){
             int* fd = serv->reliverargs[1];
             printf("%s: server picked up client, now waiting\n",__PRETTY_FUNCTION__);
             if (sleep_iter >= DEFAULT_CLIENT_TIMEOUT){
-                printf("%s: dispatcher died, starting a new one\n",__PRETTY_FUNCTION__);
+                printf("%s: client died, closing socket\n",__PRETTY_FUNCTION__);
                 close(*fd);
-                vTaskDelete(serv->acceptor);
-                if(xTaskCreate(rpcserver_dispatcher,"accept_thread",
-                    1024 * 16,serv,5,&serv->acceptor) != pdPASS) exit(1);
-                sleep_iter = 0;
             }
             sleep_iter++;
         }
