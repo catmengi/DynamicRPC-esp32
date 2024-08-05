@@ -8,7 +8,7 @@
 #include <stdint.h>
 #include <string.h>
 #include "rpctypes.h"
-
+#include "hashtable.c/hashtable.h"
 struct rpcbuff* rpcbuff_create(uint64_t* dimsizes,uint64_t dimsizes_len,uint64_t lastdim_len){
     struct __rpcbuff_el* md_array = calloc(1,sizeof(struct __rpcbuff_el));
     struct rpcbuff* cont = NULL;
@@ -53,7 +53,7 @@ struct rpcbuff* rpcbuff_create(uint64_t* dimsizes,uint64_t dimsizes_len,uint64_t
     assert(md_array->endpoint);
     return cont;
 }
-void _rpcbuff_free(struct rpcbuff* rpcbuff){
+void __rpcbuff_free_N_F_C(struct rpcbuff* rpcbuff){
     assert(rpcbuff);
     struct tqueque* tque = tqueque_create();
     struct tqueque* fque = tqueque_create();
@@ -79,8 +79,12 @@ void _rpcbuff_free(struct rpcbuff* rpcbuff){
     tqueque_free(fque);
     free(rpcbuff->start);
     free(rpcbuff->dimsizes);
+}
+void _rpcbuff_free(struct rpcbuff* rpcbuff){
+    __rpcbuff_free_N_F_C(rpcbuff);
     free(rpcbuff);
 }
+
 char* rpcbuff_getlast_from(struct  rpcbuff* rpcbuff, uint64_t* index, uint64_t index_len,uint64_t* outlen){
     assert(rpcbuff);
     assert(rpcbuff->start);
@@ -265,3 +269,4 @@ struct rpcbuff* buf_to_rpcbuff(char* buf){
     tqueque_free(tque); tqueque_free(fque);
     return rpcbuff;
 }
+
