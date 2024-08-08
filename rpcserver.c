@@ -184,7 +184,6 @@ void rpcserver_stop(struct rpcserver* serv){
     shutdown(serv->sfd,SHUT_RD);
     close(serv->sfd);
     pthread_join(serv->reliver,NULL);
-    free(serv);
 }
 int rpcserver_register_fn(struct rpcserver* serv, void* fn, char* fn_name,
                           enum rpctypes rtype, enum rpctypes* argstype,
