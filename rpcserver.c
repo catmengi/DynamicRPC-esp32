@@ -137,6 +137,7 @@ struct rpcserver* rpcserver_create(uint16_t port){
     return rpcserver;
 }
 void rpcserver_start(struct rpcserver* rpcserver){
+    rpcserver->stop = 0;
     pthread_attr_t attr;
     pthread_attr_init(&attr);
     rpcserver->reliverargs = malloc(sizeof(void*) * 2);
@@ -166,6 +167,18 @@ void rpcserver_free(struct rpcserver* serv){
     hashtable_free(serv->users);
     serv->fn_ht = NULL;
     serv->interfunc = NULL;
+    free(serv->reliverargs);
+    pthread_mutex_unlock(&serv->edit);
+    shutdown(serv->sfd,SHUT_RD);
+    close(serv->sfd);
+    pthread_join(serv->reliver,NULL);
+    free(serv);
+}
+void rpcserver_stop(struct rpcserver* serv){
+    if(!serv) return;
+    serv->stop = 1;
+    while(serv->clientcount > 0) {printf("%s:clients last:%llu\n",__PRETTY_FUNCTION__,serv->clientcount); sleep(1);}
+    pthread_mutex_lock(&serv->edit);
     free(serv->reliverargs);
     pthread_mutex_unlock(&serv->edit);
     shutdown(serv->sfd,SHUT_RD);
