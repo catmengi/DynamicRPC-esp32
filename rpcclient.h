@@ -1,6 +1,5 @@
-#ifndef RPCCALL_H
+#pragma once
 #include "rpccall.h"
-#endif
 struct rpccon{
    int fd;
    int perm;
