@@ -1,12 +1,10 @@
+#pragma once
 #include "tqueque/tqueque.h"
 #include <pthread.h>
 #include <stdatomic.h>
-//#include "freertos/task.h"
 #include "freertos/idf_additions.h"
 #include <stddef.h>
-#ifndef RPCCALL_H
 #include "rpccall.h"
-#endif
 #include <ffi.h>
 #include "hashtable.c/hashtable.h"
 struct rpcserver{
