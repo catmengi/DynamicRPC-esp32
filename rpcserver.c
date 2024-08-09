@@ -117,15 +117,8 @@ struct rpcserver* rpcserver_create(uint16_t port){
 }
 void rpcserver_start(struct rpcserver* rpcserver){
     rpcserver->stop = 0;
-    pthread_attr_t attr;
-    pthread_attr_init(&attr);
-    rpcserver->reliverargs = malloc(sizeof(void*) * 2);
-    assert(rpcserver->reliverargs);
-    rpcserver->reliverargs[0] = rpcserver;
     assert(xTaskCreate(rpcserver_dispatcher,"accept_thread",
         1024 * 16,rpcserver,5,&rpcserver->acceptor) == pdPASS);
-    assert(pthread_create(&rpcserver->reliver, &attr,rpcserver_dispatcher_reliver,rpcserver->reliverargs) == 0);
-    pthread_attr_destroy(&attr);
 }
 void __rpcserver_fn_free_callback(void* cfn){
     struct fn* fn = (struct fn*)cfn;
@@ -146,11 +139,9 @@ void rpcserver_free(struct rpcserver* serv){
     hashtable_free(serv->users);
     serv->fn_ht = NULL;
     serv->interfunc = NULL;
-    free(serv->reliverargs);
     pthread_mutex_unlock(&serv->edit);
     shutdown(serv->sfd,SHUT_RD);
     close(serv->sfd);
-    pthread_join(serv->reliver,NULL);
     free(serv);
 }
 void rpcserver_stop(struct rpcserver* serv){
@@ -162,7 +153,6 @@ void rpcserver_stop(struct rpcserver* serv){
     pthread_mutex_unlock(&serv->edit);
     shutdown(serv->sfd,SHUT_RD);
     close(serv->sfd);
-    pthread_join(serv->reliver,NULL);
 }
 int rpcserver_register_fn(struct rpcserver* serv, void* fn, char* fn_name,
                           enum rpctypes rtype, enum rpctypes* argstype,
@@ -573,35 +563,11 @@ exit:
     vTaskDelete(NULL);
 }
 
-/*this function must run in another thread*/
-void* rpcserver_dispatcher_reliver(void* args){
-    void** rargs = args;
-    struct rpcserver* serv = (struct rpcserver*)rargs[0];
-    int sleep_iter = 0;
-    while(serv->stop == 0){
-        if(serv->is_incon != 0){
-            int* fd = serv->reliverargs[1];
-            printf("%s: server picked up client, now waiting\n",__PRETTY_FUNCTION__);
-            if (sleep_iter >= DEFAULT_CLIENT_TIMEOUT){
-                printf("%s: client died, closing socket\n",__PRETTY_FUNCTION__);
-                shutdown(*fd,SHUT_RD);
-                close(*fd);
-                sleep_iter = 0;
-            }
-            sleep_iter++;
-        }
-        sleep(1);
-    }
-    printf("%s: server stopped, exiting\n",__PRETTY_FUNCTION__);
-    pthread_exit(NULL);
-}
 void rpcserver_dispatcher(void* vserv){
     struct rpcserver* serv = (struct rpcserver*)vserv;
     assert(serv);
-    serv->is_incon = 0;
     struct sockaddr_in addr = {0};
     int fd = 0;
-    serv->reliverargs[1] = &fd;
     socklen_t addrlen = 0;
     printf("%s: dispatcher started\n",__PRETTY_FUNCTION__);
     while(serv->stop == 0){
@@ -609,13 +575,16 @@ void rpcserver_dispatcher(void* vserv){
             fd = accept(serv->sfd, (struct sockaddr*)&addr,&addrlen);
                 if(fd < 0) break;
                 printf("%s: got client from %s\n",__PRETTY_FUNCTION__,inet_ntoa(addr.sin_addr));
-                serv->is_incon = 1;
                 struct rpcmsg msg = {0};
                 if(get_rpcmsg_from_fd(&msg,fd) == 0){
-                    serv->is_incon = 0;
                     printf("%s: got msg from client\n",__PRETTY_FUNCTION__);
                     if(msg.msg_type == CON){
                         printf("%s: connection ok,passing to client_thread to auth\n",__PRETTY_FUNCTION__);
+                        struct timeval time;
+                        time.tv_sec = 5;
+                        time.tv_usec = 0;
+                        assert(setsockopt(fd,SOL_SOCKET,SO_RCVTIMEO,&time,sizeof(time)) == 0);
+                        assert(setsockopt(fd,SOL_SOCKET,SO_SNDTIMEO,&time,sizeof(time)) == 0);
                         struct client_thread* thrd = malloc(sizeof(*thrd));
                         assert(thrd);
                         thrd->client_fd = fd;
@@ -629,8 +598,6 @@ void rpcserver_dispatcher(void* vserv){
                     }else {printf("%s: client not connected\n",__PRETTY_FUNCTION__);close(fd);memset(&addr,0,sizeof(addr));}
                 }else{printf("%s: wrong info from client\n",__PRETTY_FUNCTION__);close(fd);memset(&addr,0,sizeof(addr));}
                 if(msg.payload) free(msg.payload);
-                serv->is_incon = 0;
-
         }else{printf("%s:server overloaded\n",__PRETTY_FUNCTION__); sleep(1);}
     }
     printf("%s: dispatcher stopped\n",__PRETTY_FUNCTION__);
