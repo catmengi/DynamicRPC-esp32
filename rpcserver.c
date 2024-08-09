@@ -77,8 +77,6 @@ enum rpctypes ffi_type_to_rpctype(ffi_type* ffi_type){
         if(ffi_type == &ffi_type_pointer){return RPCBUFF;}
         return VOID;
 }
-
-void* rpcserver_dispatcher_reliver(void* args);
 void rpcserver_dispatcher(void* vserv);
 
 struct rpcserver* rpcserver_create(uint16_t port){
@@ -149,7 +147,6 @@ void rpcserver_stop(struct rpcserver* serv){
     serv->stop = 1;
     while(serv->clientcount > 0) {printf("%s:clients last:%llu\n",__PRETTY_FUNCTION__,serv->clientcount); sleep(1);}
     pthread_mutex_lock(&serv->edit);
-    free(serv->reliverargs);
     pthread_mutex_unlock(&serv->edit);
     shutdown(serv->sfd,SHUT_RD);
     close(serv->sfd);
