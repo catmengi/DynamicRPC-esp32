@@ -591,7 +591,7 @@ void rpcserver_dispatcher(void* vserv){
                         // pthread_create(&client_thread,&attr,rpcserver_client_thread,thrd);
                         // pthread_attr_destroy(&attr);
                         TaskHandle_t client;
-                        if(xTaskCreate(rpcserver_client_thread,"client",1024 * 16,thrd,10,&client)!=pdPASS) exit(1);
+                        assert(xTaskCreate(rpcserver_client_thread,"client",1024 * 16,thrd,10,&client)==pdPASS);
                     }else {printf("%s: client not connected\n",__PRETTY_FUNCTION__);close(fd);memset(&addr,0,sizeof(addr));}
                 }else{printf("%s: wrong info from client\n",__PRETTY_FUNCTION__);close(fd);memset(&addr,0,sizeof(addr));}
                 if(msg.payload) free(msg.payload);
