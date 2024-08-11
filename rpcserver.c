@@ -360,7 +360,8 @@ int __rpcserver_call_fn(struct rpcret* ret,struct rpcserver* serv,struct rpccall
             ret->ret.type = VOID;
         }
 
-        /*if(rtype == RPCBUFF && *(void**)fnret != NULL){
+        /* REMOVED BECAUSE OF POSSIBLE MEMORY LEAK
+        if(rtype == RPCBUFF && *(void**)fnret != NULL){
             create_rpcbuff_type(*(struct rpcbuff**)fnret,0,&ret->ret);
         }
         else if(rtype == RPCBUFF && *(void**)fnret == NULL)
