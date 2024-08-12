@@ -359,19 +359,54 @@ int __rpcserver_call_fn(struct rpcret* ret,struct rpcserver* serv,struct rpccall
         }else if(rtype == STR && *(void**)fnret == NULL){
             ret->ret.type = VOID;
         }
-
-        /* REMOVED BECAUSE OF POSSIBLE MEMORY LEAK
         if(rtype == RPCBUFF && *(void**)fnret != NULL){
+            int needfree = 1;
+            size_t el = tqueque_get_tagamm(rpcbuff_upd,NULL);
+            for(size_t i = 0; i < el; i++){
+                if(!needfree) break;
+                void* ptr = tqueque_pop(rpcbuff_upd,NULL,NULL);
+                if(ptr == *(struct rpcbuff**)fnret) needfree = 0;
+
+                assert(tqueque_push(rpcbuff_upd,ptr,sizeof(struct rpcbuff),NULL) == 0);
+            }
+            el = 0;
+            el = tqueque_get_tagamm(rpcbuff_free,NULL);
+            for(size_t i = 0; i < el; i++){
+                if(!needfree) break;
+                void* ptr = tqueque_pop(rpcbuff_free,NULL,NULL);
+                if(ptr == *(struct rpcbuff**)fnret) needfree = 0;
+
+                assert(tqueque_push(rpcbuff_free,ptr,sizeof(struct rpcbuff),NULL) == 0);
+            }
             create_rpcbuff_type(*(struct rpcbuff**)fnret,0,&ret->ret);
+            if(needfree) _rpcbuff_free(*(struct rpcbuff**)fnret);
         }
         else if(rtype == RPCBUFF && *(void**)fnret == NULL)
             ret->ret.type = VOID;
         if(rtype == RPCSTRUCT && *(void**)fnret != NULL){
+            int needfree = 1;
+            size_t el = tqueque_get_tagamm(rpcstruct_upd,NULL);
+            for(size_t i = 0; i < el; i++){
+                if(!needfree) break;
+                void* ptr = tqueque_pop(rpcstruct_upd,NULL,NULL);
+                if(ptr == *(struct rpcstruct**)fnret) needfree = 0;
+
+                assert(tqueque_push(rpcstruct_upd,ptr,sizeof(struct rpcbuff),NULL) == 0);
+            }
+            el = 0;
+            el = tqueque_get_tagamm(_rpcstruct_free,NULL);
+            for(size_t i = 0; i < el; i++){
+                if(!needfree) break;
+                void* ptr = tqueque_pop(_rpcstruct_free,NULL,NULL);
+                if(ptr == *(struct rpcstruct**)fnret) needfree = 0;
+
+                assert(tqueque_push(_rpcstruct_free,ptr,sizeof(struct rpcbuff),NULL) == 0);
+            }
             create_rpcstruct_type(*(struct rpcstruct**)fnret,0,&ret->ret);
+            if(needfree) {rpcstruct_free(*(struct rpcstruct**)fnret);free(*(struct rpcstruct**)fnret);}
         }
         else if(rtype == RPCSTRUCT && *(void**)fnret == NULL)
             ret->ret.type = VOID;
-        */
     }
     for(uint8_t i = 0; i < ret->resargs_amm; i++){
         if(ret->resargs[i].type == RPCBUFF){
