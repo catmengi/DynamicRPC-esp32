@@ -371,8 +371,12 @@ void rpcclient_fninfo_free(struct rpcclient_fninfo* in,uint64_t len){
    free(in);
 }
 void rpcclient_discon(struct rpccon* con){
+   if(con->stop != 0 ) return;
    con->stop = 1;
+   pthread_mutex_lock(&con->send);
    struct rpcmsg msg = {DISCON,0,0,0};
    rpcmsg_write_to_fd(&msg,con->fd);
    close(con->fd);
+   con->fd = -1;
+   pthread_mutex_unlock(&con->send);
 }
