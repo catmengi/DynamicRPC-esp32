@@ -497,10 +497,6 @@ void rpcserver_client_thread(void* arg){
     thrd->serv->clientcount++;
     int user_perm = 0;
     int is_authed = 0;
-    struct timeval time;
-    time.tv_sec = 5;
-    time.tv_usec = 0;
-    assert(setsockopt(thrd->client_fd,SOL_SOCKET,SO_RCVTIMEO,&time,sizeof(time)) == 0);
     if(get_rpcmsg_from_fd(&gotmsg,thrd->client_fd) == 0 && gotmsg.msg_type == AUTH && gotmsg.payload != NULL){
         struct rpctype type;
         uint64_t hash = type_to_uint64(arr_to_type(gotmsg.payload,&type));
