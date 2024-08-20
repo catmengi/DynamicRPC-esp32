@@ -527,18 +527,18 @@ void rpcserver_client_thread(void* arg){
             repl.payload = NULL;
             repl.payload_len = 0;
             printf("%s: auth ok, OK is replied to client\n",__PRETTY_FUNCTION__);
+        printf("%s: auth ok, OK is replied to client\n",__PRETTY_FUNCTION__);
             while(thrd->serv->stop == 0){
                 repl.msg_type = 0; repl.payload = NULL; repl.payload_len = 0;
                 gotmsg.msg_type = 0; gotmsg.payload = NULL; gotmsg.payload_len = 0;
                 struct rpccall call = {0}; struct rpcret ret = {0};
-                if(get_rpcmsg_from_fd(&gotmsg,thrd->client_fd) < 0) {printf("%s: client disconected badly\n",__PRETTY_FUNCTION__);goto exit;}
+                if(get_rpcmsg_from_fd(&gotmsg,thrd->client_fd) != 0) {printf("%s: client disconected badly\n",__PRETTY_FUNCTION__);goto exit;}
                 switch(gotmsg.msg_type){
-
                     case LSFN:
                                     printf("%s: client requested list of registred functions!\n",__PRETTY_FUNCTION__);
                                     repl.payload = __rpcserver_lsfn(thrd->serv,&repl.payload_len,user_perm);
                                     repl.msg_type = LSFN;
-                                    rpcmsg_write_to_fd(&repl,thrd->client_fd);
+                                    if(rpcmsg_write_to_fd(&repl,thrd->client_fd) != 0) {free(repl.payload);goto exit;}
                                     free(repl.payload);
                                     break;
                     case PING:
@@ -550,10 +550,7 @@ void rpcserver_client_thread(void* arg){
                                     goto exit;
                     case CALL:
                                     if(buf_to_rpccall(&call,gotmsg.payload) != 0 ){
-                                        printf("%s: internal server error or server closing\n",__PRETTY_FUNCTION__);
-                                        rpctypes_free(call.args,call.args_amm);
-                                        free(call.fn_name);
-                                        free(gotmsg.payload);
+                                        printf("%s: bad 'CALL' msg! \n",__PRETTY_FUNCTION__);
                                         goto exit;
                                     }
                                     free(gotmsg.payload);
@@ -562,62 +559,43 @@ void rpcserver_client_thread(void* arg){
                                     if(cfn == NULL){
                                         repl.msg_type = NOFN;
                                         printf("%s: '%s' no such function\n",__PRETTY_FUNCTION__,call.fn_name);
-                                        rpcmsg_write_to_fd(&repl,thrd->client_fd);
                                         free(call.fn_name); rpctypes_free(call.args,call.args_amm);
+                                        if(rpcmsg_write_to_fd(&repl,thrd->client_fd) != 0) goto exit;
                                         break;
                                     }else if((cfn->perm > user_perm || cfn->perm == -1) && user_perm != -1){
                                         repl.msg_type = LPERM;
                                         printf("%s: low permissions, need %d, have %d\n",__PRETTY_FUNCTION__,cfn->perm,(int)user_perm);
-                                        rpcmsg_write_to_fd(&repl,thrd->client_fd);
                                         free(call.fn_name);
                                         rpctypes_free(call.args,call.args_amm);
-                                        break;
-                                    }else repl.msg_type = OK;
-                                    if(rpcmsg_write_to_fd(&repl,thrd->client_fd) < 0){
-                                        free(call.fn_name);
-                                        rpctypes_free(call.args,call.args_amm);
-                                        printf("%s: client connection closed\n",__PRETTY_FUNCTION__);
-                                        goto exit;
-                                    }
-                                    if(get_rpcmsg_from_fd(&gotmsg,thrd->client_fd) < 0) {
-                                        free(gotmsg.payload);
-                                        free(call.fn_name);
-                                        rpctypes_free(call.args,call.args_amm);
-                                        printf("%s: client disconected badly\n",__PRETTY_FUNCTION__);
-                                        goto exit;
-                                    }
-                                    free(gotmsg.payload);
-                                    if(gotmsg.msg_type == NONREADY){printf("%s: client nonready\n",__PRETTY_FUNCTION__);free(call.fn_name); rpctypes_free(call.args,call.args_amm); break;}
-                                    if(gotmsg.msg_type == READY){
-                                        repl.msg_type = RET;
-                                        int err = 0;
-                                        int callret = 0;
-                                        if((callret = __rpcserver_call_fn(&ret,thrd->serv,&call,cfn,&err)) != 0 && err == 0){
-                                            free(call.fn_name);
-                                            rpctypes_free(call.args,call.args_amm);
-                                            printf("%s: internal server error\n",__PRETTY_FUNCTION__);
-                                            goto exit;
-                                        }else if(callret != 0 && err != 0){
-                                            repl.msg_type = BAD;
-                                            printf("%s: client provided wrong arguments\n",__PRETTY_FUNCTION__);
-                                            rpcmsg_write_to_fd(&repl,thrd->client_fd);
-                                            free(call.fn_name);
-                                            rpctypes_free(call.args,call.args_amm);
-                                            break;
-                                        }
-                                        free(call.fn_name);
-                                        repl.payload = rpcret_to_buf(&ret,&repl.payload_len);
-                                        rpcmsg_write_to_fd(&repl,thrd->client_fd);
-                                        rpctypes_free(ret.resargs,ret.resargs_amm);
-                                        free(repl.payload);
-                                        if(ret.ret.data) free(ret.ret.data);
+                                        if(rpcmsg_write_to_fd(&repl,thrd->client_fd) != 0) goto exit;
                                         break;
                                     }
-                                    free(gotmsg.payload);
+                                    repl.msg_type = RET;
+                                    int err = 0;
+                                    int callret = 0;
+                                    if((callret = __rpcserver_call_fn(&ret,thrd->serv,&call,cfn,&err)) != 0 && err == 0){
+                                        free(call.fn_name);
+                                        rpctypes_free(call.args,call.args_amm);
+                                        printf("%s: internal server error\n",__PRETTY_FUNCTION__);
+                                        goto exit;
+                                    }else if(callret != 0 && err != 0){
+                                        repl.msg_type = BAD;
+                                        printf("%s: client provided wrong arguments\n",__PRETTY_FUNCTION__);
+                                        free(call.fn_name);
+                                        rpctypes_free(call.args,call.args_amm);
+                                        if(rpcmsg_write_to_fd(&repl,thrd->client_fd) != 0) goto exit;
+                                        break;
+                                    }
                                     free(call.fn_name);
-                                    rpctypes_free(call.args,call.args_amm);
-                                    printf("%s: client bad reply\n",__PRETTY_FUNCTION__);
-                                    goto exit;
+                                    repl.payload = rpcret_to_buf(&ret,&repl.payload_len);
+                                    rpctypes_free(ret.resargs,ret.resargs_amm);
+                                    int iserror = 0;
+                                    if(rpcmsg_write_to_fd(&repl,thrd->client_fd) != 0) iserror = 1;
+                                    free(repl.payload);
+                                    if(ret.ret.data) free(ret.ret.data);
+                                    if(iserror) goto exit;
+                                    break;
+
                     default:
                             free(gotmsg.payload);
                             free(call.fn_name);
@@ -628,7 +606,7 @@ void rpcserver_client_thread(void* arg){
             }
         }else {repl.msg_type = BAD;rpcmsg_write_to_fd(&repl,thrd->client_fd);printf("%s: client not passed auth\n",__PRETTY_FUNCTION__);}
     } else printf("%s: no auth provided\n",__PRETTY_FUNCTION__);
-
+    
 exit:
     if(thrd->serv->stop == 1) printf("%s: server stopping, exiting\n",__PRETTY_FUNCTION__);
     struct rpcmsg lreply = {DISCON,0,NULL,0};
