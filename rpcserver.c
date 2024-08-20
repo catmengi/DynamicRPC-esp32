@@ -523,7 +523,6 @@ void rpcserver_client_thread(void* arg){
             repl.payload = NULL;
             repl.payload_len = 0;
             printf("%s: auth ok, OK is replied to client\n",__PRETTY_FUNCTION__);
-        printf("%s: auth ok, OK is replied to client\n",__PRETTY_FUNCTION__);
             while(thrd->serv->stop == 0){
                 repl.msg_type = 0; repl.payload = NULL; repl.payload_len = 0;
                 gotmsg.msg_type = 0; gotmsg.payload = NULL; gotmsg.payload_len = 0;
