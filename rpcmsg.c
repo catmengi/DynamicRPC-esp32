@@ -1,3 +1,4 @@
+
 #include <errno.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -9,7 +10,7 @@
 #include <assert.h>
 #include <string.h>
 #include <sys/socket.h>
-ssize_t rpcmsg_write_to_fd(struct rpcmsg* msg, int fd){
+int rpcmsg_write_to_fd(struct rpcmsg* msg, int fd){
     assert(msg);
     uint8_t crc = 0;
     for(uint64_t i = 0; i < msg->payload_len; i++){
@@ -21,21 +22,21 @@ ssize_t rpcmsg_write_to_fd(struct rpcmsg* msg, int fd){
     ssize_t sent = 0;
     errno = 0;
     sent += n = send(fd, &type, sizeof(char),MSG_NOSIGNAL);
-    if(errno != 0 || n <= 0) return -1;
+    if(errno != 0 || n <= 0) return 1;
     sent += n = send(fd, &be64_payload_len, sizeof(uint64_t),MSG_NOSIGNAL);
-    if(errno != 0 || n <= 0) return -1;
+    if(errno != 0 || n <= 0) return 1;
     size_t bufsize = msg->payload_len;
     const char *pbuffer = (const char*) msg->payload;
     while (bufsize > 0)
     {
         int n = send(fd, pbuffer, bufsize, MSG_NOSIGNAL);
         sent += n;
-        if (n <= 0 || errno != 0) return -1;
+        if (n <= 0 || errno != 0) return 1;
         pbuffer += n;
         bufsize -= n;
     }
     sent += send(fd, &crc, sizeof(uint8_t),MSG_NOSIGNAL);
-    return sent;
+    return 0;
 }
 
 int get_rpcmsg_from_fd(struct rpcmsg* msg ,int fd){
