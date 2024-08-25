@@ -203,8 +203,12 @@ int __rpcserver_call_fn(struct rpcret* ret,struct rpcserver* serv,struct rpccall
     struct tqueque* rpcbuff_free = tqueque_create();
     struct tqueque* rpcstruct_upd = tqueque_create();
     struct tqueque* _rpcstruct_free = tqueque_create();
+    struct tqueque* strret_free = tqueque_create(); //queue to track do i need to free return if it STR type
     assert(rpcbuff_upd);
     assert(rpcbuff_free);
+    assert(rpcstruct_upd);
+    assert(_rpcstruct_free);
+    assert(strret_free);
     enum rpctypes* check = rpctypes_get_types(call->args,call->args_amm);
     if(!is_rpctypes_equal(cfn->argtypes,cfn->nargs,check,call->args_amm)){
         *err_code = 7;
@@ -268,6 +272,7 @@ int __rpcserver_call_fn(struct rpcret* ret,struct rpcserver* serv,struct rpccall
                 callargs[i] = calloc(1,sizeof(char*));
                 assert(callargs[i]);
                 *(void**)callargs[i] =  unpack_str_type(&call->args[j]);
+                if(cfn->rtype == STR) tqueque_push(strret_free,*(void**)callargs[i],1,NULL);
                 j++;
                 continue;
             }
@@ -342,7 +347,6 @@ int __rpcserver_call_fn(struct rpcret* ret,struct rpcserver* serv,struct rpccall
         assert(fnret);
     }
     ffi_call(&cfn->cif,cfn->fn,fnret,callargs);
-    ret->resargs = rpctypes_clean_nonres_args(call->args,call->args_amm,&ret->resargs_amm);
     enum rpctypes rtype = cfn->rtype;
     ret->ret.type = VOID;
     if(rtype != VOID){
@@ -354,11 +358,19 @@ int __rpcserver_call_fn(struct rpcret* ret,struct rpcserver* serv,struct rpccall
         if(rtype == INT64)   int64_to_type(*(int64_t*)fnret,&ret->ret);
         if(rtype == UINT64)  uint64_to_type(*(uint64_t*)fnret,&ret->ret);
         if(rtype == FLOAT)   float_to_type(*(float*)fnret,&ret->ret);
-        if(rtype == DOUBLE)  double_to_type(*(double*)fnret,&ret->ret);\
-
+        if(rtype == DOUBLE)  double_to_type(*(double*)fnret,&ret->ret);
+        
         if(rtype == STR && *(void**)fnret != NULL){
             create_str_type(*(char**)fnret,0,&ret->ret);
-            free(*(char**)fnret);
+            int needfree = 1;
+            size_t el = tqueque_get_tagamm(strret_free,NULL);
+            for(size_t i = 0; i < el; i++){
+                if(!needfree) break;
+                void* ptr = tqueque_pop(strret_free,NULL,NULL);
+                if(ptr == *(char**)fnret) needfree = 0;
+                assert(tqueque_push(rpcstruct_upd,ptr,sizeof(struct rpcstruct),NULL) == 0);
+            }
+            if(needfree) free(*(char**)fnret);
         }else if(rtype == STR && *(void**)fnret == NULL){
             ret->ret.type = VOID;
         }
@@ -411,6 +423,8 @@ int __rpcserver_call_fn(struct rpcret* ret,struct rpcserver* serv,struct rpccall
         else if(rtype == RPCSTRUCT && *(void**)fnret == NULL)
             ret->ret.type = VOID;
     }
+    tqueque_free(strret_free);
+    ret->resargs = rpctypes_clean_nonres_args(call->args,call->args_amm,&ret->resargs_amm);
     for(uint8_t i = 0; i < ret->resargs_amm; i++){
         if(ret->resargs[i].type == RPCBUFF){
             struct rpcbuff* buf = tqueque_pop(rpcbuff_upd,NULL,NULL);
@@ -445,6 +459,9 @@ exit:
     while((buf = tqueque_pop(_rpcstruct_free,NULL,NULL)) != NULL) {rpcstruct_free(buf);free(buf);}
     tqueque_free(rpcbuff_free);
     tqueque_free(rpcbuff_upd);
+    tqueque_free(rpcbuff_free);
+    tqueque_free(_rpcstruct_free);
+    tqueque_free(strret_free);
     for(uint8_t i = 0; i < cfn->nargs; i++){
         free(callargs[i]);
     }
