@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include "tqueque/tqueque.h"
 #include <string.h>
+#include "rpccall.h"
 #include <libubox/utils.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -16,9 +17,11 @@ int is_rpctypes_equal(enum rpctypes* serv, size_t servlen, enum rpctypes* client
     assert(check_que);
     size_t newservlen = 0;
     for(size_t i = 0; i < servlen;i++){
-        assert(tqueque_push(check_que,&serv[i],sizeof(enum rpctypes),NULL) == 0);
-        if(serv[i] == SIZEDBUF) i++;
-        newservlen++;
+        if(serv[i] != INTERFUNC && serv[i] != PSTORAGE && serv[i] != UNIQSTR){
+            assert(tqueque_push(check_que,&serv[i],sizeof(enum rpctypes),NULL) == 0);
+            if(serv[i] == SIZEDBUF) i++;
+            newservlen++;
+        }
     }
     if(newservlen != clientlen) return 0;
     enum rpctypes* newserv = calloc(newservlen,sizeof(enum rpctypes));
