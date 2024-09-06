@@ -502,11 +502,11 @@ char* __rpcserver_lsfn(struct rpcserver* serv,uint64_t* outlen,int user_perm){
     free(otype.data);
     return out;
 }
-void __get_uniq(char* uniq){
-    uniq[64] = '\0';
+void __get_uniq(char* uniq,int L){
+    uniq[L - 1] = '\0';
     char charset[] = "qwertyuiop[]asdfghjkl;'zxcvbnm,./QWERTYUIOP{}ASDFGHJKL:ZXCVBNM<>?1234567890-=!@#$%^&*()_+";
     srand((unsigned int)time(NULL));
-    for(int i = 0; i < 65 - 1; i++){
+    for(int i = 0; i < L - 1; i++){
         uniq[i] = charset[(rand() % (sizeof(charset) - 1))];
     }
 }
@@ -531,7 +531,7 @@ void rpcserver_client_thread(void* arg){
         free(type.data);
         if(is_authed){
             repl.msg_type = OK;
-            __get_uniq(thrd->client_uniq);
+            __get_uniq(thrd->client_uniq,sizeof(thrd->client_uniq));
             struct rpctype uniq = {0};
             create_str_type(thrd->client_uniq,0,&uniq);
             repl.payload = malloc((repl.payload_len = type_buflen(&uniq)));
