@@ -5,7 +5,6 @@
 #include "rpctypes.h"
 #include "tqueque/tqueque.h"
 #include <string.h>
-#include "lb_endian.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <assert.h>
