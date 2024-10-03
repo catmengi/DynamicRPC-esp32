@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <libubox/utils.h>
 
 int rpcstruct_create(struct rpcstruct* rpcstruct){
     rpcstruct->count = 0;
