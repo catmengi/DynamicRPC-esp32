@@ -5,7 +5,7 @@
 #include "rpctypes.h"
 #include "tqueque/tqueque.h"
 #include <libubox/utils.h>
-#inclued "rpccall.h"
+#include "rpccall.h"
 #include <string.h>
 #include <stdint.h>
 #include <stdlib.h>
