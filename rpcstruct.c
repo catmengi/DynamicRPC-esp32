@@ -8,9 +8,18 @@
 #include <string.h>
 #include <libubox/utils.h>
 
-int rpcstruct_create(struct rpcstruct* rpcstruct){
+int __rpcstruct_create(struct rpcstruct* rpcstruct){
     rpcstruct->count = 0;
     return hashtable_create(&rpcstruct->ht,4,4);
+}
+struct rpcstruct* rpcstruct_create(){
+    struct rpcstruct* s = calloc(1,sizeof(*s));
+    assert(s);
+    if(__rpcstruct_create(s) != 0){
+        free(s);
+        return NULL;
+    }
+    return s;
 }
 int rpcstruct_set(struct rpcstruct* rpcstruct,char* key,enum rpctypes type, void* arg,size_t typelen){
     struct rpctype* check = NULL;
@@ -236,9 +245,13 @@ void __rpcstruct_free_cb(void* vptr){
     free(type->data);
     free(type);
 }
-void rpcstruct_free(struct rpcstruct* rpcstruct){
+void __rpcstruct_free(struct rpcstruct* rpcstruct){
     if(rpcstruct->count > 0) hashtable_iterate(rpcstruct->ht,__rpcstruct_free_cb);
     hashtable_free(rpcstruct->ht);
     rpcstruct->ht = 0;
     rpcstruct->count = 0;
+}
+void rpcstruct_free(struct rpcstruct* rpcstruct){
+    __rpcstruct_free(rpcstruct);
+    free(rpcstruct);
 }
