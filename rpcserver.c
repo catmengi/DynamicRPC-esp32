@@ -6,8 +6,6 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
 #include <ffi.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -552,6 +550,8 @@ void rpcserver_client_thread(void* arg){
             repl.payload_len = 0;
             if(iserror) goto exit;
             printf("%s: auth ok, OK is replied to client\n",__PRETTY_FUNCTION__);
+            if(thrd->serv->newclient_cb != NULL)
+                thrd->serv->newclient_cb(thrd->serv->newclient_cb_data,thrd->addr);
             while(thrd->serv->stop == 0){
                 repl.msg_type = 0; repl.payload = NULL; repl.payload_len = 0;
                 gotmsg.msg_type = 0; gotmsg.payload = NULL; gotmsg.payload_len = 0;
@@ -639,6 +639,8 @@ exit:
     rpcmsg_write_to_fd(&lreply,thrd->client_fd);
     close(thrd->client_fd);
     thrd->serv->clientcount--;
+    if(thrd->serv->clientdiscon_cb != NULL)
+        thrd->serv->clientdiscon_cb(thrd->serv->clientdiscon_cb_data, thrd->addr);
     free(thrd);
     // pthread_detach(pthread_self());
     // pthread_exit(NULL);
@@ -648,12 +650,12 @@ exit:
 void rpcserver_dispatcher(void* vserv){
     struct rpcserver* serv = (struct rpcserver*)vserv;
     assert(serv);
-    struct sockaddr_in addr = {0};
     int fd = 0;
-    socklen_t addrlen = 0;
     printf("%s: dispatcher started\n",__PRETTY_FUNCTION__);
     while(serv->stop == 0){
         if(serv->clientcount < DEFAULT_MAXIXIMUM_CLIENT){
+            struct sockaddr_in addr = {0};
+            unsigned int addrlen = sizeof(addr);
             fd = accept(serv->sfd, (struct sockaddr*)&addr,&addrlen);
                 if(fd < 0) break;
                 printf("%s: got client from %s\n",__PRETTY_FUNCTION__,inet_ntoa(addr.sin_addr));
@@ -671,6 +673,7 @@ void rpcserver_dispatcher(void* vserv){
                         assert(thrd);
                         thrd->client_fd = fd;
                         thrd->serv = serv;
+                        thrd->addr = addr;
                         // pthread_t client_thread = 0;
                         // pthread_attr_t attr; pthread_attr_init(&attr);
                         // pthread_create(&client_thread,&attr,rpcserver_client_thread,thrd);
@@ -684,6 +687,16 @@ void rpcserver_dispatcher(void* vserv){
     }
     printf("%s: dispatcher stopped\n",__PRETTY_FUNCTION__);
     vTaskDelete(NULL);
+}
+void rpcserver_register_newclient_cb(struct rpcserver* serv,rpcserver_newclient_cb callback, void* user){
+    assert(serv);
+    serv->newclient_cb = callback;
+    serv->newclient_cb_data = user;
+}
+void rpcserver_register_clientdiscon_cb(struct rpcserver* serv,rpcserver_clientdiscon_cb callback, void* user){
+    assert(serv);
+    serv->clientdiscon_cb = callback;
+    serv->clientdiscon_cb_data = user;
 }
 void rpcserver_load_keys(struct rpcserver* serv, char* filename){
     FILE* keys = fopen(filename,"r");
